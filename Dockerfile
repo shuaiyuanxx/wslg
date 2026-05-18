@@ -86,7 +86,14 @@ RUN echo "== Install Core dependencies ==" && \
         vala  \
         vala-devel  \
         vala-tools  \
-        zlib-devel
+        zlib-devel \
+        golang \
+        gpgme-devel \
+        libseccomp-devel \
+        libassuan-devel \
+        libgpg-error-devel \
+        yajl-devel \
+        go-md2man
 
 RUN echo "== Install UI dependencies ==" && \
     tdnf    install -y \
@@ -298,6 +305,29 @@ RUN if [ -z "$SYSTEMDISTRO_DEBUG_BUILD" ] ; then \
         /work/debuginfo/gen_debuginfo.sh /work/debuginfo/WSLGd.list /work/build; \
     fi
 
+# Build crun (lightweight OCI runtime, replacement for runc)
+ENV CC=/usr/bin/gcc
+ENV CXX=/usr/bin/g++
+ARG CRUN_VERSION=1.20
+RUN git clone --depth 1 --branch ${CRUN_VERSION} https://github.com/containers/crun.git /work/crun
+WORKDIR /work/crun
+RUN ./autogen.sh && \
+    ./configure --prefix=${PREFIX} --disable-systemd && \
+    make -j8 && \
+    make install DESTDIR=${DESTDIR} && \
+    echo 'crun:' ${CRUN_VERSION} >> /work/versions.txt
+
+# Build podman from source
+ARG PODMAN_VERSION=v5.4.0
+RUN git clone --depth 1 --branch ${PODMAN_VERSION} https://github.com/containers/podman.git /work/podman
+WORKDIR /work/podman
+RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
+        PREFIX=${PREFIX} \
+        GOPROXY=https://proxy.golang.org \
+        binaries && \
+    make install.bin install.completions PREFIX=${PREFIX} DESTDIR=${DESTDIR} && \
+    echo 'podman:' ${PODMAN_VERSION} >> /work/versions.txt
+
 # Gather debuginfo to a tar file
 WORKDIR /work/debuginfo
 RUN if [ -z "$SYSTEMDISTRO_DEBUG_BUILD" ] ; then \
@@ -348,6 +378,12 @@ RUN echo "== Install Core/UI Runtime Dependencies ==" && \
             iproute \
             moby-engine \
             nftables \
+            conmon \
+            netavark \
+            gpgme \
+            libseccomp \
+            libassuan \
+            yajl \
             pango \
             procps-ng \
             rpm \
@@ -421,6 +457,9 @@ RUN useradd -u 1000 --create-home wslg && \
 COPY config/wsl.conf /etc/wsl.conf
 COPY config/weston.ini /home/wslg/.config/weston.ini
 COPY config/local.conf /etc/fonts/local.conf
+COPY config/storage.conf /etc/containers/storage.conf
+COPY config/policy.json /etc/containers/policy.json
+COPY config/registries.conf /etc/containers/registries.conf
 
 # Copy default icon file.
 COPY resources/linux.png /usr/share/icons/wsl/linux.png
