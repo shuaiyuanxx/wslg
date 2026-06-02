@@ -93,7 +93,8 @@ RUN echo "== Install Core dependencies ==" && \
         libassuan-devel \
         libgpg-error-devel \
         yajl-devel \
-        go-md2man
+        go-md2man \
+        rust
 
 RUN echo "== Install UI dependencies ==" && \
     tdnf    install -y \
@@ -328,6 +329,17 @@ RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_device
     make install.bin install.completions PREFIX=${PREFIX} DESTDIR=${DESTDIR} && \
     echo 'podman:' ${PODMAN_VERSION} >> /work/versions.txt
 
+# Build aardvark-dns (Rust binary; provides container-name DNS resolution for
+# podman's netavark networking). Not in the Azure Linux repos, so we build from
+# source. Install path is /usr/libexec/podman/aardvark-dns — the location
+# netavark looks for it by default.
+ARG AARDVARK_VERSION=v1.14.0
+RUN git clone --depth 1 --branch ${AARDVARK_VERSION} https://github.com/containers/aardvark-dns.git /work/aardvark-dns
+WORKDIR /work/aardvark-dns
+RUN cargo build --release && \
+    install -D -m 755 target/release/aardvark-dns ${DESTDIR}${PREFIX}/libexec/podman/aardvark-dns && \
+    echo 'aardvark-dns:' ${AARDVARK_VERSION} >> /work/versions.txt
+
 # Gather debuginfo to a tar file
 WORKDIR /work/debuginfo
 RUN if [ -z "$SYSTEMDISTRO_DEBUG_BUILD" ] ; then \
@@ -460,6 +472,11 @@ COPY config/local.conf /etc/fonts/local.conf
 COPY config/storage.conf /etc/containers/storage.conf
 COPY config/policy.json /etc/containers/policy.json
 COPY config/registries.conf /etc/containers/registries.conf
+# Pre-create the default podman network with dns_enabled=true so container-name
+# resolution works out of the box via aardvark-dns. Without this file, podman
+# auto-creates the default network on first run with dns_enabled=false for
+# backwards compatibility.
+COPY config/podman-default-network.json /etc/containers/networks/podman.json
 
 # Copy default icon file.
 COPY resources/linux.png /usr/share/icons/wsl/linux.png
