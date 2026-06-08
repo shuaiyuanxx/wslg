@@ -340,6 +340,19 @@ RUN cargo build --release && \
     install -D -m 755 target/release/aardvark-dns ${DESTDIR}${PREFIX}/libexec/podman/aardvark-dns && \
     echo 'aardvark-dns:' ${AARDVARK_VERSION} >> /work/versions.txt
 
+# Build catatonit (tiny init/PID-1 binary podman uses for containers created with
+# --init, i.e. HostConfig.Init=true - signal forwarding and zombie reaping). Not in
+# the Azure Linux repos, so build from source. Install path is
+# /usr/libexec/podman/catatonit, a default location podman's init_path looks for.
+ARG CATATONIT_VERSION=v0.2.0
+RUN git clone --depth 1 --branch ${CATATONIT_VERSION} https://github.com/openSUSE/catatonit.git /work/catatonit
+WORKDIR /work/catatonit
+RUN ./autogen.sh && \
+    ./configure && \
+    make -j8 && \
+    install -D -m 755 catatonit ${DESTDIR}${PREFIX}/libexec/podman/catatonit && \
+    echo 'catatonit:' ${CATATONIT_VERSION} >> /work/versions.txt
+
 # Gather debuginfo to a tar file
 WORKDIR /work/debuginfo
 RUN if [ -z "$SYSTEMDISTRO_DEBUG_BUILD" ] ; then \
