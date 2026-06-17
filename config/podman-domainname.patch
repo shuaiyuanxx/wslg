@@ -1,0 +1,80 @@
+diff --git a/libpod/container_internal_common.go b/libpod/container_internal_common.go
+index 77eb280..ba606d8 100644
+--- a/libpod/container_internal_common.go
++++ b/libpod/container_internal_common.go
+@@ -2271,14 +2271,27 @@ func (c *Container) removeNameserver(ips []string) error {
+ 	return nil
+ }
+ 
++// containerHostsNames returns the names used for the container's own /etc/hosts entry. When a
++// domainname is configured (carried in the OCI spec), the fully qualified <hostname>.<domainname> is
++// listed first so it becomes the canonical name -- hostname --fqdn / dnsdomainname then resolve to the
++// domain, matching docker.
++func (c *Container) containerHostsNames() []string {
++	hostname := c.Hostname()
++	names := []string{hostname, c.config.Name}
++	if c.config.Spec != nil && c.config.Spec.Domainname != "" {
++		names = append([]string{hostname + "." + c.config.Spec.Domainname}, names...)
++	}
++	return names
++}
++
+ func getLocalhostHostEntry(c *Container) etchosts.HostEntries {
+-	return etchosts.HostEntries{{IP: "127.0.0.1", Names: []string{c.Hostname(), c.config.Name}}}
++	return etchosts.HostEntries{{IP: "127.0.0.1", Names: c.containerHostsNames()}}
+ }
+ 
+ // getHostsEntries returns the container ip host entries for the correct netmode
+ func (c *Container) getHostsEntries() (etchosts.HostEntries, error) {
+ 	var entries etchosts.HostEntries
+-	names := []string{c.Hostname(), c.config.Name}
++	names := c.containerHostsNames()
+ 	switch {
+ 	case c.config.NetMode.IsBridge():
+ 		entries = etchosts.GetNetworkHostEntries(c.state.NetworkStatus, names...)
+diff --git a/pkg/api/handlers/compat/containers_create.go b/pkg/api/handlers/compat/containers_create.go
+index 02253b9..e79a5a0 100644
+--- a/pkg/api/handlers/compat/containers_create.go
++++ b/pkg/api/handlers/compat/containers_create.go
+@@ -122,6 +122,9 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
+ 	sg.CreateWorkingDir = &localTrue
+ 	// moby doesn't inherit /etc/hosts from host
+ 	sg.BaseHostsFile = "none"
++	// Carry the requested NIS/UTS domainname through to the spec generator (it is
++	// applied to the OCI spec in generate; FillOutSpecGen does not handle it).
++	sg.Domainname = body.Config.Domainname
+ 
+ 	ic := abi.ContainerEngine{Libpod: runtime}
+ 	report, err := ic.ContainerCreate(r.Context(), sg)
+diff --git a/pkg/specgen/generate/namespaces_linux.go b/pkg/specgen/generate/namespaces_linux.go
+index 2c304f7..d79aedf 100644
+--- a/pkg/specgen/generate/namespaces_linux.go
++++ b/pkg/specgen/generate/namespaces_linux.go
+@@ -103,6 +103,12 @@ func specConfigureNamespaces(s *specgen.SpecGenerator, g *generate.Generator, rt
+ 		// namespaces?
+ 		g.SetHostname(hostname)
+ 	}
++	if s.Domainname != "" {
++		// Set the NIS/UTS domainname in the OCI configuration; crun applies it
++		// via setdomainname(). The runtime spec carries this separately from the
++		// hostname.
++		g.SetDomainName(s.Domainname)
++	}
+ 	if _, ok := s.Env["HOSTNAME"]; !ok && s.Hostname != "" {
+ 		g.AddProcessEnv("HOSTNAME", hostname)
+ 	}
+diff --git a/pkg/specgen/specgen.go b/pkg/specgen/specgen.go
+index c5ba5fe..5a8dc90 100644
+--- a/pkg/specgen/specgen.go
++++ b/pkg/specgen/specgen.go
+@@ -150,6 +150,10 @@ type ContainerBasicConfig struct {
+ 	// Conflicts with UtsNS if UtsNS is not set to private.
+ 	// Optional.
+ 	Hostname string `json:"hostname,omitempty"`
++	// Domainname is the container's domainname. If not set, no domainname is
++	// configured for the container.
++	// Optional.
++	Domainname string `json:"domainname,omitempty"`
+ 	// HostUsers is a list of host usernames or UIDs to add to the container
+ 	// /etc/passwd file
+ 	HostUsers []string `json:"hostusers,omitempty"`

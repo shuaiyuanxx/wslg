@@ -329,6 +329,12 @@ WORKDIR /work/podman
 # PTY before the process starts. See config/podman-exec-consolesize.patch.
 COPY config/podman-exec-consolesize.patch /work/podman-exec-consolesize.patch
 RUN git apply /work/podman-exec-consolesize.patch
+# Honor the container domainname. Unlike dockerd, upstream podman's compat
+# /containers/create drops the Docker "Domainname" field (its specgen has no
+# Domainname), so $(domainname) resolves to "(none)". This patch threads the
+# domainname into the OCI spec so crun sets it. See config/podman-domainname.patch.
+COPY config/podman-domainname.patch /work/podman-domainname.patch
+RUN git apply /work/podman-domainname.patch
 RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
         PREFIX=${PREFIX} \
         GOPROXY=https://proxy.golang.org \
