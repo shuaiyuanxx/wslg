@@ -1,0 +1,79 @@
+diff --git a/libpod/container_exec.go b/libpod/container_exec.go
+index c9efc70..bafa338 100644
+--- a/libpod/container_exec.go
++++ b/libpod/container_exec.go
+@@ -28,6 +28,12 @@ type ExecConfig struct {
+ 	Command []string `json:"command"`
+ 	// Terminal is whether the exec session will allocate a pseudoterminal.
+ 	Terminal bool `json:"terminal,omitempty"`
++	// ConsoleSize is an optional initial size for the exec session's
++	// pseudoterminal, applied at creation when Terminal is true. This lets a
++	// one-shot exec read the correct window size immediately instead of
++	// relying on an asynchronous resize that may arrive after the process has
++	// already started.
++	ConsoleSize *resize.TerminalSize `json:"consoleSize,omitempty"`
+ 	// AttachStdin is whether the STDIN stream will be forwarded to the exec
+ 	// session's first process when attaching. Only available if Terminal is
+ 	// false.
+@@ -1135,6 +1141,7 @@ func prepareForExec(c *Container, session *ExecSession) (*ExecOptions, error) {
+ 	opts.ExitCommand = session.Config.ExitCommand
+ 	opts.ExitCommandDelay = session.Config.ExitCommandDelay
+ 	opts.Privileged = session.Config.Privileged
++	opts.ConsoleSize = session.Config.ConsoleSize
+ 
+ 	return opts, nil
+ }
+diff --git a/libpod/oci.go b/libpod/oci.go
+index e0d7406..3d86e6a 100644
+--- a/libpod/oci.go
++++ b/libpod/oci.go
+@@ -193,6 +193,9 @@ type ExecOptions struct {
+ 	Env map[string]string
+ 	// Terminal is whether to create a new TTY for the exec session.
+ 	Terminal bool
++	// ConsoleSize is an optional initial size for the exec session's TTY,
++	// applied at creation when Terminal is true.
++	ConsoleSize *resize.TerminalSize
+ 	// Cwd is the working directory for the executed command. If unset, the
+ 	// working directory of the container will be used.
+ 	Cwd string
+diff --git a/libpod/oci_conmon_exec_common.go b/libpod/oci_conmon_exec_common.go
+index ca917ff..aa5dacf 100644
+--- a/libpod/oci_conmon_exec_common.go
++++ b/libpod/oci_conmon_exec_common.go
+@@ -681,6 +681,16 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
+ 	pspec.Terminal = false
+ 	if options.Terminal {
+ 		pspec.Terminal = true
++		// Size the exec PTY at creation so the process reads the correct
++		// window size immediately. Without this the PTY starts at 0x0 and is
++		// only corrected by an asynchronous resize, which can arrive after a
++		// one-shot process has already read its size.
++		if options.ConsoleSize != nil {
++			pspec.ConsoleSize = &spec.Box{
++				Height: uint(options.ConsoleSize.Height),
++				Width:  uint(options.ConsoleSize.Width),
++			}
++		}
+ 	}
+ 	if len(env) > 0 {
+ 		pspec.Env = append(pspec.Env, env...)
+diff --git a/pkg/api/handlers/compat/exec.go b/pkg/api/handlers/compat/exec.go
+index a83bf74..a39889b 100644
+--- a/pkg/api/handlers/compat/exec.go
++++ b/pkg/api/handlers/compat/exec.go
+@@ -43,6 +43,14 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
+ 	libpodConfig := new(libpod.ExecConfig)
+ 	libpodConfig.Command = input.Cmd
+ 	libpodConfig.Terminal = input.Tty
++	// Preserve the requested initial terminal size so the exec PTY can be sized
++	// at creation (docker sends ConsoleSize as [height, width]).
++	if input.ConsoleSize != nil {
++		libpodConfig.ConsoleSize = &resize.TerminalSize{
++			Height: uint16(input.ConsoleSize[0]),
++			Width:  uint16(input.ConsoleSize[1]),
++		}
++	}
+ 	libpodConfig.AttachStdin = input.AttachStdin
+ 	libpodConfig.AttachStderr = input.AttachStderr
+ 	libpodConfig.AttachStdout = input.AttachStdout

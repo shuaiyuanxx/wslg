@@ -322,6 +322,13 @@ RUN ./autogen.sh && \
 ARG PODMAN_VERSION=v5.4.0
 RUN git clone --depth 1 --branch ${PODMAN_VERSION} https://github.com/containers/podman.git /work/podman
 WORKDIR /work/podman
+# Size exec PTYs at creation. Unlike dockerd, upstream podman drops the exec
+# ConsoleSize from the API and only sizes the PTY via an asynchronous resize,
+# which a one-shot exec (e.g. `stty size`) reads too late. This patch threads
+# the requested ConsoleSize into the exec OCI process spec so crun sizes the
+# PTY before the process starts. See config/podman-exec-consolesize.patch.
+COPY config/podman-exec-consolesize.patch /work/podman-exec-consolesize.patch
+RUN git apply /work/podman-exec-consolesize.patch
 RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
         PREFIX=${PREFIX} \
         GOPROXY=https://proxy.golang.org \
