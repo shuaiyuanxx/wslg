@@ -335,6 +335,14 @@ RUN git apply /work/podman-exec-consolesize.patch
 # domainname into the OCI spec so crun sets it. See config/podman-domainname.patch.
 COPY config/podman-domainname.patch /work/podman-domainname.patch
 RUN git apply /work/podman-domainname.patch
+# Give `volume prune` Docker-compatible semantics. podman 5.4.0 always prunes
+# every unused volume and rejects the Docker "all" filter (HTTP 500), so a plain
+# prune cannot preserve named volumes. This patch normalizes the compat
+# /volumes/prune filters (all=true -> prune everything; no filter -> prune only
+# anonymous) and adds the "anonymous" prune filter. See
+# config/podman-volume-prune-anonymous.patch.
+COPY config/podman-volume-prune-anonymous.patch /work/podman-volume-prune-anonymous.patch
+RUN git apply /work/podman-volume-prune-anonymous.patch
 RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
         PREFIX=${PREFIX} \
         GOPROXY=https://proxy.golang.org \
