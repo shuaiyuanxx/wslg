@@ -343,6 +343,15 @@ RUN git apply /work/podman-domainname.patch
 # config/podman-volume-prune-anonymous.patch.
 COPY config/podman-volume-prune-anonymous.patch /work/podman-volume-prune-anonymous.patch
 RUN git apply /work/podman-volume-prune-anonymous.patch
+# Honor an explicit stop-signal override. Unlike dockerd (API v1.42+), podman's
+# compat /containers/{id}/stop ignores the "signal" query parameter and always
+# uses the container's configured StopSignal. This patch threads a per-request
+# signal through the stop path (compat handler -> StopOptions -> abi ->
+# StopWithTimeoutAndSignal -> OCI StopContainer) so `stop?signal=...` delivers
+# the requested signal, still falling back to SIGKILL after the timeout. See
+# config/podman-stop-honor-signal.patch.
+COPY config/podman-stop-honor-signal.patch /work/podman-stop-honor-signal.patch
+RUN git apply /work/podman-stop-honor-signal.patch
 RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
         PREFIX=${PREFIX} \
         GOPROXY=https://proxy.golang.org \

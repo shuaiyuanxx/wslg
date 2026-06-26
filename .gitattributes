@@ -1,0 +1,2 @@
+# Patch files must stay LF: strict Linux `git apply` in the image build rejects CRLF.
+*.patch text eol=lf
