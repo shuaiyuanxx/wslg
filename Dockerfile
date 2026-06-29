@@ -316,6 +316,7 @@ RUN ./autogen.sh && \
     ./configure --prefix=${PREFIX} --disable-systemd && \
     make -j8 && \
     make install DESTDIR=${DESTDIR} && \
+    strip ${DESTDIR}${PREFIX}/bin/crun && \
     echo 'crun:' ${CRUN_VERSION} >> /work/versions.txt
 
 # Build podman from source
@@ -357,6 +358,9 @@ RUN make BUILDTAGS="seccomp exclude_graphdriver_btrfs exclude_graphdriver_device
         GOPROXY=https://proxy.golang.org \
         binaries && \
     make install.bin install.completions PREFIX=${PREFIX} DESTDIR=${DESTDIR} && \
+    strip ${DESTDIR}${PREFIX}/bin/podman \
+          ${DESTDIR}${PREFIX}/libexec/podman/rootlessport \
+          ${DESTDIR}${PREFIX}/libexec/podman/quadlet && \
     echo 'podman:' ${PODMAN_VERSION} >> /work/versions.txt
 
 # Build aardvark-dns (Rust binary; provides container-name DNS resolution for
@@ -368,6 +372,7 @@ RUN git clone --depth 1 --branch ${AARDVARK_VERSION} https://github.com/containe
 WORKDIR /work/aardvark-dns
 RUN cargo build --release && \
     install -D -m 755 target/release/aardvark-dns ${DESTDIR}${PREFIX}/libexec/podman/aardvark-dns && \
+    strip ${DESTDIR}${PREFIX}/libexec/podman/aardvark-dns && \
     echo 'aardvark-dns:' ${AARDVARK_VERSION} >> /work/versions.txt
 
 # Build catatonit (tiny init/PID-1 binary podman uses for containers created with
@@ -381,6 +386,7 @@ RUN ./autogen.sh && \
     ./configure && \
     make -j8 && \
     install -D -m 755 catatonit ${DESTDIR}${PREFIX}/libexec/podman/catatonit && \
+    strip ${DESTDIR}${PREFIX}/libexec/podman/catatonit && \
     echo 'catatonit:' ${CATATONIT_VERSION} >> /work/versions.txt
 
 # Gather debuginfo to a tar file
