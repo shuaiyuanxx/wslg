@@ -409,14 +409,10 @@ RUN echo "== Install Core/UI Runtime Dependencies ==" && \
             ca-certificates \
             cairo \
             chrony \
-            containerd2 \
             containernetworking-plugins \
-            runc \
             dbus \
             dbus-glib \
             dhcpcd \
-            docker-buildx \
-            docker-cli \
             e2fsprogs \
             freefont \
             gzip \
@@ -437,7 +433,6 @@ RUN echo "== Install Core/UI Runtime Dependencies ==" && \
             libxkbcommon \
             libXrandr \
             iproute \
-            moby-engine \
             nftables \
             conmon \
             netavark \
