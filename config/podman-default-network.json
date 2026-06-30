@@ -8,8 +8,13 @@
         {
             "subnet": "10.88.0.0/16",
             "gateway": "10.88.0.1"
+        },
+        {
+            "subnet": "fd03:3f62:bbf6:cbc3::/64",
+            "gateway": "fd03:3f62:bbf6:cbc3::1"
         }
     ],
+    "ipv6_enabled": true,
     "internal": false,
     "dns_enabled": true,
     "ipam_options": {
